@@ -1,0 +1,28 @@
+cff-version: 1.2.0
+title: "AGIL: AI-Guided Inquiry Learning for Computational Drug Discovery"
+message: "If you use this software, please cite it as below."
+type: software
+authors:
+  - family-names: "Wijesinghe"
+    given-names: "Dayanjan S."
+    orcid: "https://orcid.org/0000-0002-2124-5109"
+    affiliation: "Virginia Commonwealth University School of Pharmacy"
+    email: "wijesingheds@vcu.edu"
+repository-code: "https://github.com/dayanjan/AGIL-VIP-AI-PSCI-Public"
+url: "https://github.com/dayanjan/AGIL-VIP-AI-PSCI-Public"
+abstract: >-
+  AGIL (AI-Guided Inquiry Learning) is a pedagogical framework that
+  synthesizes Process Oriented Guided Inquiry Learning (POGIL),
+  Just-in-Time Teaching (JiTT), and AI-as-learning-partner for
+  computational drug discovery education. This repository contains
+  20 guided inquiry notebooks (talktorials) and curriculum materials.
+keywords:
+  - AI in education
+  - computational drug discovery
+  - guided inquiry
+  - POGIL
+  - cheminformatics
+  - pharmaceutical sciences education
+license: CC-BY-NC-4.0
+version: "1.0.0"
+date-released: "2026-01-04"
