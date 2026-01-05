@@ -1,7 +1,7 @@
 # AGIL: AI-Guided Inquiry Learning for Computational Drug Discovery
 
 [![License: CC BY-NC 4.0](https://img.shields.io/badge/License-CC%20BY--NC%204.0-lightgrey.svg)](https://creativecommons.org/licenses/by-nc/4.0/)
-[![DOI](https://img.shields.io/badge/DOI-pending-blue.svg)]()
+[![DOI](https://zenodo.org/badge/DOI/10.5281/zenodo.18152188.svg)](https://doi.org/10.5281/zenodo.18152188)
 
 > **Companion repository for the AGIL theoretical framework manuscript**
 
@@ -148,13 +148,18 @@ See [FOR_EDUCATORS.md](FOR_EDUCATORS.md) for details.
 
 If you use AGIL materials in your teaching or research, please cite:
 
+**APA Format:**
+> Wijesinghe, D. S. (2026). AI-Guided Inquiry Learning (AGIL): A Pedagogical Synthesis for Computational Drug Discovery Education. Zenodo. https://doi.org/10.5281/zenodo.18152188
+
 ```bibtex
-@article{wijesinghe2026agil,
-  title={AI-Guided Inquiry Learning (AGIL): A Pedagogical Synthesis for
-         Computational Drug Discovery Education},
-  author={Wijesinghe, Dayanjan S.},
-  year={2026},
-  note={Manuscript in preparation}
+@misc{wijesinghe2026agil,
+  author       = {Wijesinghe, Dayanjan S.},
+  title        = {{AI-Guided Inquiry Learning (AGIL): A Pedagogical
+                   Synthesis for Computational Drug Discovery Education}},
+  year         = {2026},
+  publisher    = {Zenodo},
+  doi          = {10.5281/zenodo.18152188},
+  url          = {https://doi.org/10.5281/zenodo.18152188}
 }
 ```
 
@@ -189,4 +194,4 @@ ORCID: [0000-0002-2124-5109](https://orcid.org/0000-0002-2124-5109)
 
 ---
 
-*This repository accompanies the AGIL theoretical framework manuscript (in preparation for publication).*
+*This repository accompanies the AGIL theoretical framework manuscript (submitted to EdArXiv, January 2026).*

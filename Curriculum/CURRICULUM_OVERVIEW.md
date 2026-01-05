@@ -18,6 +18,18 @@ Unlike traditional tutorials with pre-written code, AGIL talktorials require stu
 
 ---
 
+## Three-Exposure Learning Cycle
+
+AGIL uses a structured weekly cycle:
+
+1. **Friday Evening (Inquiry Phase)**: Guided inquiry questions released - students explore concepts with AI assistance
+2. **Sunday (Talktorial Phase)**: Empty notebooks released - students implement through coding
+3. **Tuesday (Synthesis Phase)**: In-class discussion and expert guidance
+
+See [GUIDED_INQUIRY_QUESTIONS.md](GUIDED_INQUIRY_QUESTIONS.md) for the complete set of prerequisite inquiry questions for each talktorial.
+
+---
+
 ## 6-Target Drug Discovery Portfolio
 
 Students work with one of six therapeutically diverse drug targets:
@@ -77,4 +89,4 @@ See [FOR_EDUCATORS.md](../FOR_EDUCATORS.md) for access information.
 
 ## License
 
-This curriculum overview is provided under CC BY-NC 4.0. Commercial use requires a separate license.
+This work is licensed under CC BY-NC 4.0.
