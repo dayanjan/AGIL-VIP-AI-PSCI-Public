@@ -153,9 +153,8 @@ If you use AGIL materials in your teaching or research, please cite:
   title={AI-Guided Inquiry Learning (AGIL): A Pedagogical Synthesis for
          Computational Drug Discovery Education},
   author={Wijesinghe, Dayanjan S.},
-  journal={CBE-Life Sciences Education},
   year={2026},
-  note={Preprint available on EdArXiv}
+  note={Manuscript in preparation}
 }
 ```
 
@@ -190,4 +189,4 @@ ORCID: [0000-0002-2124-5109](https://orcid.org/0000-0002-2124-5109)
 
 ---
 
-*This repository accompanies the AGIL theoretical framework manuscript submitted to CBE-Life Sciences Education.*
+*This repository accompanies the AGIL theoretical framework manuscript (in preparation for publication).*
