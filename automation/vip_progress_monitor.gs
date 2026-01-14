@@ -78,24 +78,127 @@ const PROGRESS_CONFIG = {
       {
         name: 'AI-Assisted Learning Documentation',
         aliases: ['AI-Assisted Learning', 'AI Learning', 'Section 1'],
-        subsections: ['Weekly Inquiry Logs', 'AI Verification Log', 'Prompt Engineering Progress']
+        subsections: ['Weekly Inquiry Logs', 'AI Verification Log', 'Prompt Engineering Progress'],
+        weeklyRequired: true  // Expect weekly entries in this section
       },
       {
         name: 'Technical Documentation',
         aliases: ['Technical', 'Section 2'],
-        subsections: ['Daily Progress Notes', 'Code Documentation', 'Experimental Design']
+        subsections: ['Daily Progress Notes', 'Code Documentation', 'Experimental Design'],
+        weeklyRequired: true
       },
       {
         name: 'Reflection Section',
         aliases: ['Reflection', 'Reflections', 'Section 3'],
-        subsections: ['Weekly Reflections', 'Challenge Analysis', 'AI Learning Reflection']
+        subsections: ['Weekly Reflections', 'Challenge Analysis', 'AI Learning Reflection'],
+        weeklyRequired: true
       },
       {
         name: 'Integration Section',
         aliases: ['Integration', 'Section 4'],
-        subsections: ['Monthly Synthesis', 'Cross-Disciplinary Insights', 'Healthcare Impact']
+        subsections: ['Monthly Synthesis', 'Cross-Disciplinary Insights', 'Healthcare Impact'],
+        weeklyRequired: false  // Monthly synthesis, not weekly
       }
+    ],
+    // Patterns to detect weekly entries (e.g., "Week 1", "Week 2", dates)
+    weekPatterns: [
+      /week\s*(\d+)/i,
+      /w(\d+)/i,
+      /\b(jan|feb|mar|apr|may)\w*\s+\d{1,2}/i,
+      /\d{1,2}\/\d{1,2}\/\d{2,4}/
     ]
+  },
+
+  // Lab notebook tracking settings
+  labNotebookTracking: {
+    // Minimum word count per weekly entry to consider it "substantive"
+    minWordsPerEntry: 50,
+    // Alert if lab notebook not updated in this many days
+    notebookInactivityDays: 7,
+    // Weight for overall progress calculation (0-1)
+    notebookProgressWeight: 0.3  // 30% of overall score
+  },
+
+  // ---------------------------------------------------------------------------
+  // STUDENT NUDGE EMAIL SETTINGS
+  // ---------------------------------------------------------------------------
+
+  nudgeEmails: {
+    // Email sender name (appears in "From" field)
+    senderName: 'VIP AI-PSCI Course',
+
+    // CC instructor on all nudge emails
+    ccInstructor: true,
+
+    // Email templates - customize these messages
+    templates: {
+      // For students behind on current week's talktorials
+      behindOnWork: {
+        subject: 'VIP AI-PSCI: Friendly Reminder - Week {week} Talktorials',
+        body: `Hi {firstName},
+
+I noticed you haven't yet completed the talktorial(s) for Week {week}:
+{missingTalktorials}
+
+These are due by the end of the week. If you're having any difficulties or need help getting started, please don't hesitate to reach out - I'm happy to help!
+
+Remember, you can use AI tools like Claude or ChatGPT to help you work through the code. The goal is learning, not perfection.
+
+Best,
+{instructorName}
+
+---
+VIP AI in Pharmaceutical Sciences: Bench to Bedside
+This is an automated reminder from the VIP Progress Monitor.`
+      },
+
+      // For students who haven't been active recently
+      inactive: {
+        subject: 'VIP AI-PSCI: Checking In - {daysInactive} Days Since Last Activity',
+        body: `Hi {firstName},
+
+I noticed it's been {daysInactive} days since your last activity in the VIP course materials. I wanted to check in and make sure everything is okay.
+
+Your current progress:
+• Talktorial completion: {talktorialPercent}%
+• Lab notebook: {notebookPercent}%
+• Overall: {overallPercent}%
+
+If you're facing any challenges - whether technical, conceptual, or personal - please let me know. We can work together to get you back on track.
+
+The upcoming work for this week includes:
+{upcomingWork}
+
+Best,
+{instructorName}
+
+---
+VIP AI in Pharmaceutical Sciences: Bench to Bedside
+This is an automated reminder from the VIP Progress Monitor.`
+      },
+
+      // For students with low overall progress
+      lowProgress: {
+        subject: 'VIP AI-PSCI: Let\'s Chat About Your Progress',
+        body: `Hi {firstName},
+
+I'm reaching out because your overall progress in the VIP course ({overallPercent}%) is below where I'd expect at this point in the semester.
+
+Here's where you stand:
+• Completed talktorials: {completedCount} of {expectedCount}
+• Lab notebook entries: {notebookPercent}%
+
+I'd like to schedule a brief check-in to discuss how I can better support you. This isn't about grades - it's about making sure you're getting the learning experience you deserve.
+
+Please reply to this email or stop by my office hours to chat.
+
+Best,
+{instructorName}
+
+---
+VIP AI in Pharmaceutical Sciences: Bench to Bedside`
+      }
+    }
   },
 
   // ---------------------------------------------------------------------------
@@ -174,6 +277,7 @@ function refreshProgressDashboard() {
   const emailCol = headers.indexOf('Email');
   const folderIdCol = headers.indexOf('Folder ID');
   const talktorialFolderIdCol = headers.indexOf('Talktorial Folder ID');
+  const labNotebookIdCol = headers.indexOf('Lab Notebook ID');
   const folderCreatedCol = headers.indexOf('Folder Created');
 
   if (nameCol === -1 || folderIdCol === -1) {
@@ -199,6 +303,7 @@ function refreshProgressDashboard() {
     const email = row[emailCol];
     const folderId = row[folderIdCol];
     const talktorialFolderId = row[talktorialFolderIdCol];
+    const labNotebookId = labNotebookIdCol !== -1 ? row[labNotebookIdCol] : null;
     const folderCreated = row[folderCreatedCol];
 
     // Skip empty rows or students without folders
@@ -208,8 +313,8 @@ function refreshProgressDashboard() {
     Logger.log('Processing student: ' + name);
 
     try {
-      // Get student progress
-      const progress = getStudentProgress(name, folderId, talktorialFolderId, currentWeek);
+      // Get student progress (includes talktorials AND lab notebook)
+      const progress = getStudentProgress(name, folderId, talktorialFolderId, currentWeek, labNotebookId);
       dashboardData.push(progress);
 
       // Check for alerts
@@ -240,31 +345,53 @@ function refreshProgressDashboard() {
   // Write dashboard
   writeDashboardSheet(dashboard, dashboardData, currentWeek);
 
+  // Calculate averages for reporting
+  const avgOverall = dashboardData.length > 0
+    ? Math.round(dashboardData.reduce((sum, s) => sum + s.progressPercent, 0) / dashboardData.length)
+    : 0;
+  const avgTalktorial = dashboardData.length > 0
+    ? Math.round(dashboardData.reduce((sum, s) => sum + s.talktorialPercent, 0) / dashboardData.length)
+    : 0;
+  const avgNotebook = dashboardData.length > 0
+    ? Math.round(dashboardData.reduce((sum, s) => sum + s.notebookPercent, 0) / dashboardData.length)
+    : 0;
+
   // Log summary
   Logger.log('Dashboard refreshed. ' + dashboardData.length + ' students processed.');
   Logger.log('Students needing attention: ' + alertStudents.length);
+  Logger.log('Averages - Overall: ' + avgOverall + '%, Talktorial: ' + avgTalktorial + '%, Notebook: ' + avgNotebook + '%');
 
   return {
     studentsProcessed: dashboardData.length,
     alertCount: alertStudents.length,
-    alertStudents: alertStudents
+    alertStudents: alertStudents,
+    avgOverall: avgOverall,
+    avgTalktorial: avgTalktorial,
+    avgNotebook: avgNotebook
   };
 }
 
 /**
  * Get progress data for a single student
  */
-function getStudentProgress(name, folderId, talktorialFolderId, currentWeek) {
+function getStudentProgress(name, folderId, talktorialFolderId, currentWeek, labNotebookId) {
   const progress = {
     name: name,
+    // Talktorial progress
     completedCount: 0,
     totalExpected: 0,
-    progressPercent: 0,
+    talktorialPercent: 0,
     lastActivity: null,
     daysSinceActivity: 0,
     weekStatus: {},
+    // Lab notebook progress
+    notebook: null,
+    notebookPercent: 0,
+    // Combined progress
+    progressPercent: 0,
     needsAttention: false,
-    alertReason: ''
+    alertReason: '',
+    alertReasons: []  // Multiple reasons possible
   };
 
   // Get the talktorial folder
@@ -347,12 +474,12 @@ function getStudentProgress(name, folderId, talktorialFolderId, currentWeek) {
     progress.weekStatus[week] = weekStatus.join('');
   }
 
-  // Calculate percentage
+  // Calculate talktorial percentage
   if (progress.totalExpected > 0) {
-    progress.progressPercent = Math.round((progress.completedCount / progress.totalExpected) * 100);
+    progress.talktorialPercent = Math.round((progress.completedCount / progress.totalExpected) * 100);
   }
 
-  // Calculate days since activity
+  // Calculate days since talktorial activity
   if (lastModified) {
     progress.lastActivity = lastModified;
     const now = new Date();
@@ -361,13 +488,41 @@ function getStudentProgress(name, folderId, talktorialFolderId, currentWeek) {
     progress.daysSinceActivity = 999; // No activity found
   }
 
-  // Check if student needs attention
+  // Get lab notebook progress
+  if (labNotebookId) {
+    progress.notebook = getLabNotebookProgress(labNotebookId, currentWeek);
+    progress.notebookPercent = progress.notebook.weeklyCompleteness;
+
+    // Update last activity to include notebook activity
+    if (progress.notebook.lastModified) {
+      if (!progress.lastActivity || progress.notebook.lastModified > progress.lastActivity) {
+        progress.lastActivity = progress.notebook.lastModified;
+        progress.daysSinceActivity = progress.notebook.daysSinceUpdate;
+      }
+    }
+  }
+
+  // Calculate combined progress (weighted average)
+  progress.progressPercent = getCombinedProgressScore(
+    progress.talktorialPercent,
+    progress.notebookPercent
+  );
+
+  // Check if student needs attention - collect all alerts
   if (progress.daysSinceActivity > PROGRESS_CONFIG.inactivityThresholdDays) {
+    progress.alertReasons.push('Inactive ' + progress.daysSinceActivity + 'd');
+  }
+  if (progress.talktorialPercent < PROGRESS_CONFIG.minExpectedProgressPercent) {
+    progress.alertReasons.push('Talktorials ' + progress.talktorialPercent + '%');
+  }
+  if (progress.notebook && progress.notebook.alerts.length > 0) {
+    // Add first notebook alert (most important)
+    progress.alertReasons.push('Notebook: ' + progress.notebook.alerts[0]);
+  }
+
+  if (progress.alertReasons.length > 0) {
     progress.needsAttention = true;
-    progress.alertReason = 'Inactive for ' + progress.daysSinceActivity + ' days';
-  } else if (progress.progressPercent < PROGRESS_CONFIG.minExpectedProgressPercent) {
-    progress.needsAttention = true;
-    progress.alertReason = 'Progress below ' + PROGRESS_CONFIG.minExpectedProgressPercent + '%';
+    progress.alertReason = progress.alertReasons.join('; ');
   }
 
   return progress;
@@ -380,10 +535,19 @@ function writeDashboardSheet(sheet, data, currentWeek) {
   // Clear existing content
   sheet.clear();
 
-  // Build headers
-  const headers = ['Student', 'Progress', '%', 'Last Activity', 'Days Idle'];
+  // Build headers - now includes both talktorial and notebook tracking
+  const headers = [
+    'Student',
+    'Overall',    // Combined progress
+    'Talktorials', // Talktorial count
+    'T%',          // Talktorial percentage
+    'Notebook',    // Notebook weekly entries
+    'N%',          // Notebook percentage
+    'Last Active',
+    'Days'
+  ];
 
-  // Add week columns
+  // Add week columns for talktorials
   for (let w = 1; w <= currentWeek; w++) {
     const weekTalktorials = PROGRESS_CONFIG.talktorialSchedule[w] || [];
     if (weekTalktorials.length > 0) {
@@ -403,15 +567,23 @@ function writeDashboardSheet(sheet, data, currentWeek) {
 
   // Build data rows
   const rows = data.map(student => {
+    // Build notebook weekly entry string (e.g., "3/5" for 3 of 5 weeks)
+    const notebookWeeks = student.notebook
+      ? student.notebook.weeksWithEntries + '/' + student.notebook.expectedWeeks
+      : 'N/A';
+
     const row = [
       student.name,
-      student.completedCount + '/' + student.totalExpected,
-      student.progressPercent + '%',
+      student.progressPercent + '%',                                         // Overall (combined)
+      student.completedCount + '/' + student.totalExpected,                  // Talktorials count
+      student.talktorialPercent + '%',                                       // Talktorial %
+      notebookWeeks,                                                         // Notebook weeks
+      student.notebookPercent + '%',                                         // Notebook %
       student.lastActivity ? Utilities.formatDate(student.lastActivity, 'America/New_York', 'MM/dd') : 'Never',
       student.daysSinceActivity === 999 ? 'N/A' : student.daysSinceActivity
     ];
 
-    // Add week status columns
+    // Add week status columns (talktorials)
     for (let w = 1; w <= currentWeek; w++) {
       const weekTalktorials = PROGRESS_CONFIG.talktorialSchedule[w] || [];
       if (weekTalktorials.length > 0) {
@@ -441,24 +613,37 @@ function writeDashboardSheet(sheet, data, currentWeek) {
   const summaryRow = rows.length + 3;
   const onTrackCount = data.filter(s => !s.needsAttention).length;
   const alertCount = data.filter(s => s.needsAttention).length;
-  const avgProgress = data.length > 0
+  const avgOverall = data.length > 0
     ? Math.round(data.reduce((sum, s) => sum + s.progressPercent, 0) / data.length)
     : 0;
+  const avgTalktorial = data.length > 0
+    ? Math.round(data.reduce((sum, s) => sum + s.talktorialPercent, 0) / data.length)
+    : 0;
+  const avgNotebook = data.length > 0
+    ? Math.round(data.reduce((sum, s) => sum + s.notebookPercent, 0) / data.length)
+    : 0;
 
-  sheet.getRange(summaryRow, 1, 1, 4).setValues([[
+  sheet.getRange(summaryRow, 1, 1, 6).setValues([[
     'SUMMARY',
     'Week ' + currentWeek,
-    'Avg: ' + avgProgress + '%',
-    onTrackCount + ' on track, ' + alertCount + ' need attention'
+    'Avg Overall: ' + avgOverall + '%',
+    'Avg Talktorial: ' + avgTalktorial + '%',
+    'Avg Notebook: ' + avgNotebook + '%',
+    onTrackCount + ' on track, ' + alertCount + ' alerts'
   ]]);
-  sheet.getRange(summaryRow, 1, 1, 4)
+  sheet.getRange(summaryRow, 1, 1, 6)
     .setFontWeight('bold')
     .setBackground('#f3f3f3');
 
   // Add legend
   const legendRow = summaryRow + 2;
-  sheet.getRange(legendRow, 1, 1, 5).setValues([[
-    'Legend:', '✓ = Modified', '○ = Untouched', '✗ = Missing', ''
+  sheet.getRange(legendRow, 1, 1, 6).setValues([[
+    'Legend:',
+    'Talktorials: ✓=Modified ○=Untouched ✗=Missing',
+    'Notebook: Weeks with entries/Total weeks',
+    'Overall = 70% Talktorial + 30% Notebook',
+    '',
+    ''
   ]]);
   sheet.getRange(legendRow, 1).setFontWeight('bold');
 
@@ -480,16 +665,17 @@ function writeDashboardSheet(sheet, data, currentWeek) {
 
 /**
  * Apply conditional formatting to the dashboard
+ * Column layout: Student | Overall | Talktorials | T% | Notebook | N% | Last Active | Days | W1... | Status
  */
 function applyDashboardFormatting(sheet, numRows, numCols, currentWeek) {
-  // Color the progress percentage column based on value
-  const progressColIndex = 3;
+  // Column indices (1-based)
+  const overallColIndex = 2;      // Overall %
+  const talktorialPctColIndex = 4; // Talktorial %
+  const notebookPctColIndex = 6;   // Notebook %
+  const daysIdleColIndex = 8;      // Days
 
-  for (let row = 2; row <= numRows + 1; row++) {
-    const cell = sheet.getRange(row, progressColIndex);
-    const value = cell.getValue();
-    const percent = parseInt(value);
-
+  // Helper function to apply color based on percentage
+  function applyPercentColor(cell, percent) {
     if (percent >= 80) {
       cell.setBackground('#c6efce').setFontColor('#006100'); // Green
     } else if (percent >= 50) {
@@ -499,34 +685,54 @@ function applyDashboardFormatting(sheet, numRows, numCols, currentWeek) {
     }
   }
 
-  // Color the days idle column
-  const daysIdleColIndex = 5;
-
   for (let row = 2; row <= numRows + 1; row++) {
-    const cell = sheet.getRange(row, daysIdleColIndex);
-    const value = cell.getValue();
-    const days = parseInt(value);
+    // Color the overall progress column
+    const overallCell = sheet.getRange(row, overallColIndex);
+    const overallValue = overallCell.getValue();
+    const overallPercent = parseInt(overallValue);
+    if (!isNaN(overallPercent)) {
+      applyPercentColor(overallCell, overallPercent);
+    }
+
+    // Color the talktorial percentage column
+    const talktorialCell = sheet.getRange(row, talktorialPctColIndex);
+    const talktorialValue = talktorialCell.getValue();
+    const talktorialPercent = parseInt(talktorialValue);
+    if (!isNaN(talktorialPercent)) {
+      applyPercentColor(talktorialCell, talktorialPercent);
+    }
+
+    // Color the notebook percentage column
+    const notebookCell = sheet.getRange(row, notebookPctColIndex);
+    const notebookValue = notebookCell.getValue();
+    const notebookPercent = parseInt(notebookValue);
+    if (!isNaN(notebookPercent)) {
+      applyPercentColor(notebookCell, notebookPercent);
+    }
+
+    // Color the days idle column
+    const daysCell = sheet.getRange(row, daysIdleColIndex);
+    const daysValue = daysCell.getValue();
+    const days = parseInt(daysValue);
 
     if (!isNaN(days)) {
       if (days <= 2) {
-        cell.setBackground('#c6efce'); // Green
+        daysCell.setBackground('#c6efce'); // Green
       } else if (days <= PROGRESS_CONFIG.inactivityThresholdDays) {
-        cell.setBackground('#ffeb9c'); // Yellow
+        daysCell.setBackground('#ffeb9c'); // Yellow
       } else {
-        cell.setBackground('#ffc7ce'); // Red
+        daysCell.setBackground('#ffc7ce'); // Red
       }
     }
-  }
 
-  // Color the status column (last column)
-  for (let row = 2; row <= numRows + 1; row++) {
-    const cell = sheet.getRange(row, numCols);
-    const value = cell.getValue();
+    // Color the status column (last column)
+    const statusCell = sheet.getRange(row, numCols);
+    const statusValue = statusCell.getValue();
 
-    if (value.includes('✅')) {
-      cell.setBackground('#c6efce');
-    } else if (value.includes('⚠️')) {
-      cell.setBackground('#ffc7ce');
+    if (statusValue.includes('✅')) {
+      statusCell.setBackground('#c6efce');
+    } else if (statusValue.includes('⚠️')) {
+      statusCell.setBackground('#ffc7ce');
     }
   }
 }
@@ -550,23 +756,40 @@ function sendWeeklyProgressReport() {
   const ss = SpreadsheetApp.openById(PROGRESS_CONFIG.rosterSpreadsheetId);
   const dashboardUrl = ss.getUrl() + '#gid=' + ss.getSheetByName(PROGRESS_CONFIG.dashboardSheetName).getSheetId();
 
+  // Calculate averages from dashboard data
+  const dashboard = ss.getSheetByName(PROGRESS_CONFIG.dashboardSheetName);
+  const avgOverall = result.avgOverall || 0;
+  const avgTalktorial = result.avgTalktorial || 0;
+  const avgNotebook = result.avgNotebook || 0;
+
   // Build email body
   let emailBody = `Weekly Progress Report - Week ${currentWeek}\n\n`;
+  emailBody += `${'═'.repeat(50)}\n`;
+  emailBody += `SUMMARY\n`;
+  emailBody += `${'─'.repeat(50)}\n`;
   emailBody += `Students Tracked: ${result.studentsProcessed}\n`;
   emailBody += `Students On Track: ${result.studentsProcessed - result.alertCount}\n`;
   emailBody += `Students Needing Attention: ${result.alertCount}\n\n`;
 
+  emailBody += `PROGRESS AVERAGES\n`;
+  emailBody += `${'─'.repeat(50)}\n`;
+  emailBody += `Overall Progress: ${avgOverall}%\n`;
+  emailBody += `  • Talktorial Completion: ${avgTalktorial}%\n`;
+  emailBody += `  • Lab Notebook Entries: ${avgNotebook}%\n\n`;
+
   if (result.alertCount > 0) {
-    emailBody += `STUDENTS NEEDING ATTENTION:\n`;
-    emailBody += `${'─'.repeat(40)}\n`;
+    emailBody += `STUDENTS NEEDING ATTENTION\n`;
+    emailBody += `${'─'.repeat(50)}\n`;
     result.alertStudents.forEach(student => {
       emailBody += `• ${student.name}: ${student.reason}\n`;
     });
     emailBody += `\n`;
   }
 
+  emailBody += `${'═'.repeat(50)}\n`;
   emailBody += `View Full Dashboard: ${dashboardUrl}\n\n`;
-  emailBody += `This report was generated automatically by VIP Progress Monitor.`;
+  emailBody += `This report was generated automatically by VIP Progress Monitor.\n`;
+  emailBody += `Progress = 70% Talktorials + 30% Lab Notebook`;
 
   // Send email
   MailApp.sendEmail({
@@ -577,17 +800,26 @@ function sendWeeklyProgressReport() {
 
   Logger.log('Weekly progress report sent to ' + PROGRESS_CONFIG.instructorEmail);
 
-  // Also send to Chat if there are alerts
+  // Also send to Chat
+  let chatMessage = `📊 *Weekly Progress Report - Week ${currentWeek}*\n\n`;
+  chatMessage += `*Class Averages:*\n`;
+  chatMessage += `• Overall: ${avgOverall}%\n`;
+  chatMessage += `• Talktorials: ${avgTalktorial}%\n`;
+  chatMessage += `• Lab Notebook: ${avgNotebook}%\n\n`;
+
   if (result.alertCount > 0) {
-    let chatMessage = `📊 *Weekly Progress Report - Week ${currentWeek}*\n\n`;
-    chatMessage += `Students needing attention: *${result.alertCount}*\n\n`;
-    result.alertStudents.forEach(student => {
+    chatMessage += `⚠️ *${result.alertCount} student(s) need attention:*\n`;
+    result.alertStudents.slice(0, 5).forEach(student => {
       chatMessage += `• ${student.name}: ${student.reason}\n`;
     });
-    chatMessage += `\nView dashboard for details.`;
-
-    sendProgressChatMessage(chatMessage);
+    if (result.alertStudents.length > 5) {
+      chatMessage += `... and ${result.alertStudents.length - 5} more\n`;
+    }
+  } else {
+    chatMessage += `✅ All students on track!`;
   }
+
+  sendProgressChatMessage(chatMessage);
 }
 
 /**
@@ -618,6 +850,386 @@ function checkInactiveStudents() {
     sendProgressChatMessage(message);
     Logger.log('Inactivity alert sent for ' + severeAlerts.length + ' students');
   }
+}
+
+// ============================================================================
+// STUDENT NUDGE EMAIL FUNCTIONS
+// ============================================================================
+
+/**
+ * Get list of students who need nudging (preview before sending)
+ * Returns object with categorized student lists
+ */
+function getStudentsToNudge() {
+  const result = refreshProgressDashboard();
+  if (!result) {
+    return { behind: [], inactive: [], lowProgress: [] };
+  }
+
+  const currentWeek = getCurrentWeekForProgress();
+  const expectedTalktorials = getTalktorialsUpToWeekForProgress(currentWeek);
+
+  // Get full student data from roster
+  const ss = SpreadsheetApp.openById(PROGRESS_CONFIG.rosterSpreadsheetId);
+  const roster = ss.getSheetByName(PROGRESS_CONFIG.rosterSheetName);
+  const dashboard = ss.getSheetByName(PROGRESS_CONFIG.dashboardSheetName);
+
+  const rosterData = roster.getDataRange().getValues();
+  const headers = rosterData[0];
+  const emailCol = headers.indexOf('Email');
+  const nameCol = headers.indexOf('Name');
+
+  // Build email lookup from roster
+  const studentEmails = {};
+  for (let i = 1; i < rosterData.length; i++) {
+    const name = rosterData[i][nameCol];
+    const email = rosterData[i][emailCol];
+    if (name && email) {
+      studentEmails[name] = email;
+    }
+  }
+
+  // Get dashboard data
+  const dashboardData = dashboard.getDataRange().getValues();
+  const dashHeaders = dashboardData[0];
+  const dNameCol = dashHeaders.indexOf('Student');
+  const dProgressCol = dashHeaders.indexOf('Overall %');
+  const dTalktorialCol = dashHeaders.indexOf('Talktorial %');
+  const dNotebookCol = dashHeaders.indexOf('Notebook %');
+  const dDaysCol = dashHeaders.indexOf('Days Inactive');
+  const dStatusCol = dashHeaders.indexOf('Status');
+
+  const behind = [];
+  const inactive = [];
+  const lowProgress = [];
+
+  for (let i = 1; i < dashboardData.length; i++) {
+    const row = dashboardData[i];
+    const name = row[dNameCol];
+    const email = studentEmails[name];
+    const overallPercent = parseInt(row[dProgressCol]) || 0;
+    const talktorialPercent = parseInt(row[dTalktorialCol]) || 0;
+    const notebookPercent = parseInt(row[dNotebookCol]) || 0;
+    const daysInactive = parseInt(row[dDaysCol]) || 0;
+    const status = row[dStatusCol] || '';
+
+    if (!name || !email) continue;
+
+    const firstName = name.split(' ')[0];
+
+    // Find missing talktorials for current week
+    const currentWeekTalktorials = PROGRESS_CONFIG.talktorialSchedule[currentWeek] || [];
+    const missingCurrentWeek = [];
+
+    // Check week columns for current week status
+    const weekColIndex = dashHeaders.indexOf('W' + currentWeek);
+    if (weekColIndex !== -1) {
+      const weekStatus = row[weekColIndex];
+      if (weekStatus === '○' || weekStatus === '○○') {
+        currentWeekTalktorials.forEach(num => {
+          missingCurrentWeek.push('AI-PSCI-' + String(num).padStart(3, '0'));
+        });
+      }
+    }
+
+    const studentData = {
+      name: name,
+      firstName: firstName,
+      email: email,
+      overallPercent: overallPercent,
+      talktorialPercent: talktorialPercent,
+      notebookPercent: notebookPercent,
+      daysInactive: daysInactive,
+      missingTalktorials: missingCurrentWeek,
+      completedCount: Math.round(talktorialPercent * expectedTalktorials.length / 100),
+      expectedCount: expectedTalktorials.length
+    };
+
+    // Categorize students
+    if (missingCurrentWeek.length > 0) {
+      behind.push(studentData);
+    }
+
+    if (daysInactive >= PROGRESS_CONFIG.inactivityThresholdDays) {
+      inactive.push(studentData);
+    }
+
+    if (overallPercent < PROGRESS_CONFIG.minExpectedProgressPercent) {
+      lowProgress.push(studentData);
+    }
+  }
+
+  return {
+    behind: behind,
+    inactive: inactive,
+    lowProgress: lowProgress,
+    currentWeek: currentWeek
+  };
+}
+
+/**
+ * Preview which students would receive nudge emails
+ */
+function previewNudgeEmails() {
+  const ui = SpreadsheetApp.getUi();
+  const nudgeData = getStudentsToNudge();
+
+  let message = '📋 NUDGE EMAIL PREVIEW\n\n';
+
+  message += '📝 BEHIND ON CURRENT WEEK (' + nudgeData.behind.length + ' students):\n';
+  if (nudgeData.behind.length === 0) {
+    message += '   None - all caught up!\n';
+  } else {
+    nudgeData.behind.forEach(s => {
+      message += '   • ' + s.name + ' (' + s.email + ')\n';
+      message += '     Missing: ' + s.missingTalktorials.join(', ') + '\n';
+    });
+  }
+
+  message += '\n⏰ INACTIVE (' + nudgeData.inactive.length + ' students):\n';
+  if (nudgeData.inactive.length === 0) {
+    message += '   None - everyone active!\n';
+  } else {
+    nudgeData.inactive.forEach(s => {
+      message += '   • ' + s.name + ' - ' + s.daysInactive + ' days inactive\n';
+    });
+  }
+
+  message += '\n⚠️ LOW PROGRESS (' + nudgeData.lowProgress.length + ' students):\n';
+  if (nudgeData.lowProgress.length === 0) {
+    message += '   None - everyone on track!\n';
+  } else {
+    nudgeData.lowProgress.forEach(s => {
+      message += '   • ' + s.name + ' - ' + s.overallPercent + '% overall\n';
+    });
+  }
+
+  ui.alert('Nudge Email Preview', message, ui.ButtonSet.OK);
+}
+
+/**
+ * Send nudge emails to students behind on current week's work
+ */
+function nudgeBehindStudents() {
+  const ui = SpreadsheetApp.getUi();
+  const nudgeData = getStudentsToNudge();
+
+  if (nudgeData.behind.length === 0) {
+    ui.alert('No Nudges Needed', 'All students are caught up on Week ' + nudgeData.currentWeek + ' work!', ui.ButtonSet.OK);
+    return;
+  }
+
+  // Confirm before sending
+  const response = ui.alert(
+    'Confirm Send',
+    'Send reminder emails to ' + nudgeData.behind.length + ' student(s) who are behind on Week ' + nudgeData.currentWeek + '?\n\n' +
+    nudgeData.behind.map(s => '• ' + s.name).join('\n'),
+    ui.ButtonSet.YES_NO
+  );
+
+  if (response !== ui.Button.YES) {
+    return;
+  }
+
+  const template = PROGRESS_CONFIG.nudgeEmails.templates.behindOnWork;
+  let sentCount = 0;
+  let errors = [];
+
+  nudgeData.behind.forEach(student => {
+    try {
+      const subject = fillTemplate(template.subject, student, nudgeData.currentWeek);
+      const body = fillTemplate(template.body, student, nudgeData.currentWeek);
+
+      const emailOptions = {
+        to: student.email,
+        subject: subject,
+        body: body,
+        name: PROGRESS_CONFIG.nudgeEmails.senderName
+      };
+
+      if (PROGRESS_CONFIG.nudgeEmails.ccInstructor) {
+        emailOptions.cc = PROGRESS_CONFIG.instructorEmail;
+      }
+
+      MailApp.sendEmail(emailOptions);
+      sentCount++;
+      Logger.log('Nudge sent to: ' + student.email);
+
+    } catch (error) {
+      errors.push(student.name + ': ' + error.message);
+      Logger.log('Error sending to ' + student.email + ': ' + error.message);
+    }
+  });
+
+  // Report results
+  let resultMessage = '✅ Sent ' + sentCount + ' of ' + nudgeData.behind.length + ' emails.';
+  if (errors.length > 0) {
+    resultMessage += '\n\n❌ Errors:\n' + errors.join('\n');
+  }
+
+  ui.alert('Nudge Emails Sent', resultMessage, ui.ButtonSet.OK);
+
+  // Log to chat
+  sendProgressChatMessage('📬 Sent ' + sentCount + ' nudge emails to students behind on Week ' + nudgeData.currentWeek);
+}
+
+/**
+ * Send nudge emails to inactive students
+ */
+function nudgeInactiveStudents() {
+  const ui = SpreadsheetApp.getUi();
+  const nudgeData = getStudentsToNudge();
+
+  if (nudgeData.inactive.length === 0) {
+    ui.alert('No Nudges Needed', 'No students have been inactive for ' + PROGRESS_CONFIG.inactivityThresholdDays + '+ days!', ui.ButtonSet.OK);
+    return;
+  }
+
+  // Confirm before sending
+  const response = ui.alert(
+    'Confirm Send',
+    'Send check-in emails to ' + nudgeData.inactive.length + ' inactive student(s)?\n\n' +
+    nudgeData.inactive.map(s => '• ' + s.name + ' (' + s.daysInactive + ' days)').join('\n'),
+    ui.ButtonSet.YES_NO
+  );
+
+  if (response !== ui.Button.YES) {
+    return;
+  }
+
+  const template = PROGRESS_CONFIG.nudgeEmails.templates.inactive;
+  const currentWeek = nudgeData.currentWeek;
+  const upcomingTalktorials = PROGRESS_CONFIG.talktorialSchedule[currentWeek] || [];
+  const upcomingWork = upcomingTalktorials.length > 0
+    ? upcomingTalktorials.map(n => '• AI-PSCI-' + String(n).padStart(3, '0')).join('\n')
+    : '• No new talktorials this week';
+
+  let sentCount = 0;
+  let errors = [];
+
+  nudgeData.inactive.forEach(student => {
+    try {
+      student.upcomingWork = upcomingWork;
+      const subject = fillTemplate(template.subject, student, currentWeek);
+      const body = fillTemplate(template.body, student, currentWeek);
+
+      const emailOptions = {
+        to: student.email,
+        subject: subject,
+        body: body,
+        name: PROGRESS_CONFIG.nudgeEmails.senderName
+      };
+
+      if (PROGRESS_CONFIG.nudgeEmails.ccInstructor) {
+        emailOptions.cc = PROGRESS_CONFIG.instructorEmail;
+      }
+
+      MailApp.sendEmail(emailOptions);
+      sentCount++;
+      Logger.log('Inactivity nudge sent to: ' + student.email);
+
+    } catch (error) {
+      errors.push(student.name + ': ' + error.message);
+      Logger.log('Error sending to ' + student.email + ': ' + error.message);
+    }
+  });
+
+  // Report results
+  let resultMessage = '✅ Sent ' + sentCount + ' of ' + nudgeData.inactive.length + ' emails.';
+  if (errors.length > 0) {
+    resultMessage += '\n\n❌ Errors:\n' + errors.join('\n');
+  }
+
+  ui.alert('Nudge Emails Sent', resultMessage, ui.ButtonSet.OK);
+
+  // Log to chat
+  sendProgressChatMessage('📬 Sent ' + sentCount + ' check-in emails to inactive students');
+}
+
+/**
+ * Send nudge emails to students with low overall progress
+ */
+function nudgeLowProgressStudents() {
+  const ui = SpreadsheetApp.getUi();
+  const nudgeData = getStudentsToNudge();
+
+  if (nudgeData.lowProgress.length === 0) {
+    ui.alert('No Nudges Needed', 'All students are above ' + PROGRESS_CONFIG.minExpectedProgressPercent + '% progress!', ui.ButtonSet.OK);
+    return;
+  }
+
+  // Confirm before sending
+  const response = ui.alert(
+    'Confirm Send',
+    'Send check-in emails to ' + nudgeData.lowProgress.length + ' student(s) with low progress?\n\n' +
+    nudgeData.lowProgress.map(s => '• ' + s.name + ' (' + s.overallPercent + '%)').join('\n'),
+    ui.ButtonSet.YES_NO
+  );
+
+  if (response !== ui.Button.YES) {
+    return;
+  }
+
+  const template = PROGRESS_CONFIG.nudgeEmails.templates.lowProgress;
+  let sentCount = 0;
+  let errors = [];
+
+  nudgeData.lowProgress.forEach(student => {
+    try {
+      const subject = fillTemplate(template.subject, student, nudgeData.currentWeek);
+      const body = fillTemplate(template.body, student, nudgeData.currentWeek);
+
+      const emailOptions = {
+        to: student.email,
+        subject: subject,
+        body: body,
+        name: PROGRESS_CONFIG.nudgeEmails.senderName
+      };
+
+      if (PROGRESS_CONFIG.nudgeEmails.ccInstructor) {
+        emailOptions.cc = PROGRESS_CONFIG.instructorEmail;
+      }
+
+      MailApp.sendEmail(emailOptions);
+      sentCount++;
+      Logger.log('Low progress nudge sent to: ' + student.email);
+
+    } catch (error) {
+      errors.push(student.name + ': ' + error.message);
+      Logger.log('Error sending to ' + student.email + ': ' + error.message);
+    }
+  });
+
+  // Report results
+  let resultMessage = '✅ Sent ' + sentCount + ' of ' + nudgeData.lowProgress.length + ' emails.';
+  if (errors.length > 0) {
+    resultMessage += '\n\n❌ Errors:\n' + errors.join('\n');
+  }
+
+  ui.alert('Nudge Emails Sent', resultMessage, ui.ButtonSet.OK);
+
+  // Log to chat
+  sendProgressChatMessage('📬 Sent ' + sentCount + ' check-in emails to students with low progress');
+}
+
+/**
+ * Fill email template with student data
+ */
+function fillTemplate(template, student, currentWeek) {
+  return template
+    .replace(/{firstName}/g, student.firstName || '')
+    .replace(/{name}/g, student.name || '')
+    .replace(/{email}/g, student.email || '')
+    .replace(/{week}/g, currentWeek || '')
+    .replace(/{overallPercent}/g, student.overallPercent || '0')
+    .replace(/{talktorialPercent}/g, student.talktorialPercent || '0')
+    .replace(/{notebookPercent}/g, student.notebookPercent || '0')
+    .replace(/{daysInactive}/g, student.daysInactive || '0')
+    .replace(/{completedCount}/g, student.completedCount || '0')
+    .replace(/{expectedCount}/g, student.expectedCount || '0')
+    .replace(/{missingTalktorials}/g, student.missingTalktorials ? student.missingTalktorials.map(t => '• ' + t).join('\n') : '')
+    .replace(/{upcomingWork}/g, student.upcomingWork || '')
+    .replace(/{instructorName}/g, PROGRESS_CONFIG.instructorName || 'Instructor');
 }
 
 /**
@@ -689,6 +1301,215 @@ function getTalktorialsUpToWeekForProgress(week) {
 }
 
 // ============================================================================
+// LAB NOTEBOOK TRACKING FUNCTIONS
+// ============================================================================
+
+/**
+ * Get lab notebook progress for a student
+ * @param {string} labNotebookId - Google Doc ID of the lab notebook
+ * @param {number} currentWeek - Current week of semester
+ * @returns {Object} Lab notebook progress data
+ */
+function getLabNotebookProgress(labNotebookId, currentWeek) {
+  const progress = {
+    exists: false,
+    lastModified: null,
+    daysSinceUpdate: 999,
+    sectionsFound: [],
+    sectionsMissing: [],
+    sectionCompleteness: 0,
+    weeklyEntries: {},
+    weeksWithEntries: 0,
+    expectedWeeks: currentWeek,
+    weeklyCompleteness: 0,
+    totalWordCount: 0,
+    hasSubstantiveContent: false,
+    alerts: []
+  };
+
+  if (!labNotebookId) {
+    progress.alerts.push('No lab notebook ID found');
+    return progress;
+  }
+
+  try {
+    // Get the file to check last modified date
+    const file = DriveApp.getFileById(labNotebookId);
+    progress.exists = true;
+    progress.lastModified = file.getLastUpdated();
+
+    const now = new Date();
+    progress.daysSinceUpdate = Math.floor((now - progress.lastModified) / (1000 * 60 * 60 * 24));
+
+    // Open the document to analyze content
+    const doc = DocumentApp.openById(labNotebookId);
+    const body = doc.getBody();
+    const fullText = body.getText();
+
+    // Count total words
+    progress.totalWordCount = fullText.split(/\s+/).filter(w => w.length > 0).length;
+    progress.hasSubstantiveContent = progress.totalWordCount >= PROGRESS_CONFIG.labNotebookTracking.minWordsPerEntry * 3;
+
+    // Check for required sections
+    const expectedSections = PROGRESS_CONFIG.notebookStructure.sections;
+    expectedSections.forEach(section => {
+      const sectionNames = [section.name, ...section.aliases];
+      let found = false;
+
+      for (const name of sectionNames) {
+        if (fullText.toLowerCase().includes(name.toLowerCase())) {
+          found = true;
+          break;
+        }
+      }
+
+      if (found) {
+        progress.sectionsFound.push(section.name);
+      } else {
+        progress.sectionsMissing.push(section.name);
+      }
+    });
+
+    progress.sectionCompleteness = Math.round((progress.sectionsFound.length / expectedSections.length) * 100);
+
+    // Detect weekly entries
+    const weekPatterns = PROGRESS_CONFIG.notebookStructure.weekPatterns;
+    const weeksFound = new Set();
+
+    // Check for explicit week references (Week 1, Week 2, etc.)
+    const weekMatches = fullText.matchAll(/week\s*(\d+)/gi);
+    for (const match of weekMatches) {
+      const weekNum = parseInt(match[1]);
+      if (weekNum >= 1 && weekNum <= 16) {
+        weeksFound.add(weekNum);
+      }
+    }
+
+    // Also check for W1, W2, etc. format
+    const shortWeekMatches = fullText.matchAll(/\bw(\d+)\b/gi);
+    for (const match of shortWeekMatches) {
+      const weekNum = parseInt(match[1]);
+      if (weekNum >= 1 && weekNum <= 16) {
+        weeksFound.add(weekNum);
+      }
+    }
+
+    // Build weekly entry status
+    for (let w = 1; w <= currentWeek; w++) {
+      progress.weeklyEntries[w] = weeksFound.has(w) ? '✓' : '○';
+      if (weeksFound.has(w)) {
+        progress.weeksWithEntries++;
+      }
+    }
+
+    progress.weeklyCompleteness = currentWeek > 0
+      ? Math.round((progress.weeksWithEntries / currentWeek) * 100)
+      : 0;
+
+    // Generate alerts
+    if (progress.daysSinceUpdate > PROGRESS_CONFIG.labNotebookTracking.notebookInactivityDays) {
+      progress.alerts.push('Notebook not updated in ' + progress.daysSinceUpdate + ' days');
+    }
+    if (progress.sectionsMissing.length > 0) {
+      progress.alerts.push('Missing sections: ' + progress.sectionsMissing.length);
+    }
+    if (progress.weeksWithEntries < currentWeek - 1) {
+      progress.alerts.push('Missing ' + (currentWeek - progress.weeksWithEntries) + ' weekly entries');
+    }
+
+  } catch (error) {
+    Logger.log('Error reading lab notebook ' + labNotebookId + ': ' + error.message);
+    progress.alerts.push('Error reading notebook: ' + error.message);
+  }
+
+  return progress;
+}
+
+/**
+ * Analyze lab notebook content with AI (optional feature)
+ * @param {string} labNotebookId - Google Doc ID
+ * @param {string} studentName - Student name for context
+ * @returns {Object} AI analysis results
+ */
+function analyzeLabNotebookWithAI(labNotebookId, studentName) {
+  const analysis = {
+    success: false,
+    qualityScore: 0,
+    strengths: [],
+    improvements: [],
+    summary: ''
+  };
+
+  const apiKey = getClaudeApiKey();
+  if (!apiKey) {
+    analysis.summary = 'API key not configured';
+    return analysis;
+  }
+
+  try {
+    const doc = DocumentApp.openById(labNotebookId);
+    const body = doc.getBody();
+    const fullText = body.getText();
+
+    // Truncate if too long (keep under ~10k chars for API)
+    const truncatedText = fullText.length > 10000
+      ? fullText.substring(0, 10000) + '\n...[truncated]'
+      : fullText;
+
+    const prompt = `Analyze this student lab notebook for a pharmaceutical sciences AI course.
+The student is: ${studentName}
+
+Expected sections:
+1. AI-Assisted Learning Documentation (Weekly Inquiry Logs, AI Verification Log, Prompt Engineering Progress)
+2. Technical Documentation (Daily Progress Notes, Code Documentation, Experimental Design)
+3. Reflection Section (Weekly Reflections, Challenge Analysis, AI Learning Reflection)
+4. Integration Section (Monthly Synthesis, Cross-Disciplinary Insights, Healthcare Impact)
+
+Lab Notebook Content:
+${truncatedText}
+
+Provide a brief analysis in this exact JSON format:
+{
+  "qualityScore": <1-10>,
+  "strengths": ["strength1", "strength2"],
+  "improvements": ["improvement1", "improvement2"],
+  "summary": "One sentence summary"
+}`;
+
+    const response = callClaudeAPI(prompt, 512);
+
+    // Parse the JSON response
+    const jsonMatch = response.match(/\{[\s\S]*\}/);
+    if (jsonMatch) {
+      const parsed = JSON.parse(jsonMatch[0]);
+      analysis.success = true;
+      analysis.qualityScore = parsed.qualityScore || 0;
+      analysis.strengths = parsed.strengths || [];
+      analysis.improvements = parsed.improvements || [];
+      analysis.summary = parsed.summary || '';
+    }
+
+  } catch (error) {
+    Logger.log('AI analysis error for ' + studentName + ': ' + error.message);
+    analysis.summary = 'Analysis failed: ' + error.message;
+  }
+
+  return analysis;
+}
+
+/**
+ * Get combined progress score (talktorials + lab notebook)
+ */
+function getCombinedProgressScore(talktorialPercent, notebookPercent) {
+  const notebookWeight = PROGRESS_CONFIG.labNotebookTracking.notebookProgressWeight;
+  const talktorialWeight = 1 - notebookWeight;
+
+  return Math.round(
+    (talktorialPercent * talktorialWeight) + (notebookPercent * notebookWeight)
+  );
+}
+
+// ============================================================================
 // INDIVIDUAL STUDENT FUNCTIONS
 // ============================================================================
 
@@ -718,6 +1539,7 @@ function viewStudentDetail() {
   const nameCol = headers.indexOf('Name');
   const folderIdCol = headers.indexOf('Folder ID');
   const talktorialFolderIdCol = headers.indexOf('Talktorial Folder ID');
+  const labNotebookIdCol = headers.indexOf('Lab Notebook ID');
 
   let studentRow = null;
   for (let i = 1; i < data.length; i++) {
@@ -733,28 +1555,62 @@ function viewStudentDetail() {
   }
 
   const currentWeek = getCurrentWeekForProgress();
+  const labNotebookId = labNotebookIdCol !== -1 ? studentRow[labNotebookIdCol] : null;
+
   const progress = getStudentProgress(
     studentRow[nameCol],
     studentRow[folderIdCol],
     studentRow[talktorialFolderIdCol],
-    currentWeek
+    currentWeek,
+    labNotebookId
   );
 
   // Build detail message
   let detail = `Student: ${progress.name}\n\n`;
-  detail += `Overall Progress: ${progress.completedCount}/${progress.totalExpected} (${progress.progressPercent}%)\n`;
+
+  // Overall progress section
+  detail += `═══════════════════════════════════════\n`;
+  detail += `OVERALL PROGRESS\n`;
+  detail += `───────────────────────────────────────\n`;
+  detail += `Combined Score: ${progress.progressPercent}%\n`;
   detail += `Last Activity: ${progress.lastActivity ? Utilities.formatDate(progress.lastActivity, 'America/New_York', 'MM/dd/yyyy') : 'Never'}\n`;
   detail += `Days Since Activity: ${progress.daysSinceActivity === 999 ? 'N/A' : progress.daysSinceActivity}\n\n`;
 
-  detail += `Week-by-Week Status:\n`;
+  // Talktorial progress section
+  detail += `TALKTORIAL PROGRESS (70% weight)\n`;
+  detail += `───────────────────────────────────────\n`;
+  detail += `Completed: ${progress.completedCount}/${progress.totalExpected} (${progress.talktorialPercent}%)\n\n`;
+
+  detail += `Week-by-Week:\n`;
   for (let w = 1; w <= currentWeek; w++) {
     const weekTalktorials = PROGRESS_CONFIG.talktorialSchedule[w] || [];
     if (weekTalktorials.length > 0) {
-      detail += `Week ${w}: ${progress.weekStatus[w] || '-'} (AI-PSCI-${weekTalktorials.map(n => String(n).padStart(3, '0')).join(', ')})\n`;
+      detail += `  W${w}: ${progress.weekStatus[w] || '-'} (AI-PSCI-${weekTalktorials.map(n => String(n).padStart(3, '0')).join(', ')})\n`;
     }
   }
 
-  detail += `\nStatus: ${progress.needsAttention ? '⚠️ ' + progress.alertReason : '✅ On Track'}`;
+  // Lab notebook progress section
+  detail += `\nLAB NOTEBOOK PROGRESS (30% weight)\n`;
+  detail += `───────────────────────────────────────\n`;
+  if (progress.notebook) {
+    detail += `Weekly Entries: ${progress.notebook.weeksWithEntries}/${progress.notebook.expectedWeeks} weeks (${progress.notebookPercent}%)\n`;
+    detail += `Total Words: ${progress.notebook.totalWordCount}\n`;
+    detail += `Sections Found: ${progress.notebook.sectionsFound.length}/4\n`;
+    if (progress.notebook.sectionsMissing.length > 0) {
+      detail += `Missing: ${progress.notebook.sectionsMissing.join(', ')}\n`;
+    }
+    detail += `Last Updated: ${progress.notebook.lastModified ? Utilities.formatDate(progress.notebook.lastModified, 'America/New_York', 'MM/dd/yyyy') : 'Never'}\n`;
+
+    if (progress.notebook.alerts.length > 0) {
+      detail += `Alerts: ${progress.notebook.alerts.join('; ')}\n`;
+    }
+  } else {
+    detail += `No lab notebook found\n`;
+  }
+
+  // Status section
+  detail += `\n═══════════════════════════════════════\n`;
+  detail += `Status: ${progress.needsAttention ? '⚠️ ' + progress.alertReason : '✅ On Track'}`;
 
   ui.alert('Student Progress Detail', detail, ui.ButtonSet.OK);
 }
@@ -1042,6 +1898,13 @@ function createProgressMenu() {
   ui.createMenu('📊 VIP Progress')
     .addItem('🔄 Refresh Dashboard', 'refreshProgressDashboard')
     .addItem('👤 View Student Detail', 'viewStudentDetail')
+    .addSeparator()
+    .addSubMenu(ui.createMenu('📬 Nudge Students')
+      .addItem('👀 Preview Who Needs Nudging', 'previewNudgeEmails')
+      .addSeparator()
+      .addItem('📝 Nudge Behind on Current Week', 'nudgeBehindStudents')
+      .addItem('⏰ Nudge Inactive Students', 'nudgeInactiveStudents')
+      .addItem('⚠️ Nudge Low Progress Students', 'nudgeLowProgressStudents'))
     .addSeparator()
     .addSubMenu(ui.createMenu('🤖 AI Analysis (Optional)')
       .addItem('Test Claude API', 'testClaudeAPI')
