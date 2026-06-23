@@ -1,6 +1,7 @@
 # AGIL: AI-Guided Inquiry Learning for Computational Drug Discovery
 
 [![License: CC BY-NC 4.0](https://img.shields.io/badge/License-CC%20BY--NC%204.0-lightgrey.svg)](https://creativecommons.org/licenses/by-nc/4.0/)
+[![EdArXiv Preprint](https://img.shields.io/badge/EdArXiv-Preprint-blue.svg)](https://doi.org/10.35542/osf.io/k45fs_v1)
 [![DOI](https://zenodo.org/badge/DOI/10.5281/zenodo.18152188.svg)](https://doi.org/10.5281/zenodo.18152188)
 
 > **Companion repository for the AGIL theoretical framework manuscript**
@@ -21,6 +22,7 @@
 | Folder | Contents | Manuscript Reference |
 |--------|----------|---------------------|
 | `AGIL-Framework/` | Theoretical framework, core principles, figures | Sections 1-8 |
+| `AGIL-Framework/AGIL_Preprint_EdArXiv.pdf` | Full preprint PDF (EdArXiv, [DOI](https://doi.org/10.35542/osf.io/k45fs_v1)) | Entire manuscript |
 | `Curriculum/` | Course structure and talktorial sequence | Section 3, Table 1 |
 | `Talktorials/` | 20 guided inquiry notebooks (empty code cells) | Section 4 |
 | `Talktorials/AI-PSCI-001-Scaffold.ipynb` | Annotated example showing teaching design | Section 4.2-4.4 |
@@ -78,7 +80,8 @@ AGIL integrates:
 
 ```
 AGIL-Framework/           # Theoretical framework documentation
-├── AGIL_Theoretical_Framework.md    # Full manuscript
+├── AGIL_Preprint_EdArXiv.pdf        # Full preprint PDF (EdArXiv)
+├── AGIL_Theoretical_Framework.md    # Full manuscript (markdown)
 ├── AGIL_Principles.md               # Core principles (Section 5)
 └── AGIL-Figure [1-4].png            # Publication figures
 
@@ -146,22 +149,27 @@ See [FOR_EDUCATORS.md](FOR_EDUCATORS.md) for details.
 
 ## Citation
 
-If you use AGIL materials in your teaching or research, please cite:
+If you use AGIL materials in your teaching or research, please cite the **preprint**:
 
 **APA Format:**
-> Wijesinghe, D. S. (2026). AI-Guided Inquiry Learning (AGIL): A Pedagogical Synthesis for Computational Drug Discovery Education. Zenodo. https://doi.org/10.5281/zenodo.18152188
+> Wijesinghe, D. S. (2026). AI-Guided Inquiry Learning (AGIL): A Pedagogical Synthesis for Computational Drug Discovery Education. *EdArXiv*. https://doi.org/10.35542/osf.io/k45fs_v1
 
 ```bibtex
-@misc{wijesinghe2026agil,
+@article{wijesinghe2026agil,
   author       = {Wijesinghe, Dayanjan S.},
   title        = {{AI-Guided Inquiry Learning (AGIL): A Pedagogical
                    Synthesis for Computational Drug Discovery Education}},
   year         = {2026},
-  publisher    = {Zenodo},
-  doi          = {10.5281/zenodo.18152188},
-  url          = {https://doi.org/10.5281/zenodo.18152188}
+  publisher    = {EdArXiv},
+  doi          = {10.35542/osf.io/k45fs_v1},
+  url          = {https://doi.org/10.35542/osf.io/k45fs_v1},
+  note         = {Preprint}
 }
 ```
+
+To cite the **software and curriculum materials** (this repository), use the Zenodo DOI:
+
+> Wijesinghe, D. S. (2026). AI-Guided Inquiry Learning (AGIL): A Pedagogical Synthesis for Computational Drug Discovery Education [Software]. Zenodo. https://doi.org/10.5281/zenodo.18152188
 
 ## Acknowledgements
 
@@ -194,4 +202,4 @@ ORCID: [0000-0002-2124-5109](https://orcid.org/0000-0002-2124-5109)
 
 ---
 
-*This repository accompanies the AGIL theoretical framework manuscript (submitted to EdArXiv, January 2026).*
+*This repository accompanies the AGIL theoretical framework manuscript, available as a preprint on EdArXiv (DOI: [10.35542/osf.io/k45fs_v1](https://doi.org/10.35542/osf.io/k45fs_v1), posted January 2026).*

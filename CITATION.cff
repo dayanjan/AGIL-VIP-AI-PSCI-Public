@@ -26,3 +26,25 @@ keywords:
 license: CC-BY-NC-4.0
 version: "1.0.0"
 date-released: "2026-01-04"
+identifiers:
+  - type: doi
+    value: "10.5281/zenodo.18152188"
+    description: "Zenodo archive of the software and curriculum materials"
+  - type: doi
+    value: "10.35542/osf.io/k45fs_v1"
+    description: "EdArXiv preprint of the AGIL theoretical framework manuscript"
+preferred-citation:
+  type: article
+  title: "AI-Guided Inquiry Learning (AGIL): A Pedagogical Synthesis for Computational Drug Discovery Education"
+  authors:
+    - family-names: "Wijesinghe"
+      given-names: "Dayanjan S."
+      orcid: "https://orcid.org/0000-0002-2124-5109"
+      affiliation: "Virginia Commonwealth University School of Pharmacy"
+  year: 2026
+  month: 1
+  publisher:
+    name: "EdArXiv"
+  doi: "10.35542/osf.io/k45fs_v1"
+  url: "https://doi.org/10.35542/osf.io/k45fs_v1"
+  notes: "Preprint"
