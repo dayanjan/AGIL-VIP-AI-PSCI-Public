@@ -147,6 +147,12 @@ See [FOR_EDUCATORS.md](FOR_EDUCATORS.md) for details.
 - **Packages**: All installed automatically in Colab (RDKit, BioPython, py3Dmol, etc.)
 - **AI Assistant**: Claude, ChatGPT, or GitHub Copilot
 
+## The Program in Action
+
+AGIL is being piloted in VCU's **"AI in Pharmaceutical Sciences: Bench to Bedside"** Vertically Integrated Project (VIP). VCU News profiled student researcher Joseph Lin, who used AI as a collaborator to narrow 150 candidate drug-resistance mutations down to 25 — illustrating the AI-partnered scientific inquiry that AGIL is designed to teach:
+
+> [Class of 2026: Joseph Lin brings computing power to cancer research](https://news.vcu.edu/article/class-of-2026-joseph-lin-brings-computing-power-to-cancer-research) — *VCU News*, 2026
+
 ## Citation
 
 If you use AGIL materials in your teaching or research, please cite the **preprint**:
